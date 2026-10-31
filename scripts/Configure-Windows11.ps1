@@ -27,7 +27,7 @@ function Set-Windows11ShellLayout([string]$Root, [string]$SourceDirectory, [int]
     $taskbar = Join-Path $Root 'TaskbarLayout.xml'
     Copy-Item -LiteralPath (Join-Path $assets 'TaskbarLayout.xml') -Destination $taskbar -Force
     [xml]$validatedTaskbar = Get-Content -LiteralPath $taskbar -Raw
-    New-Item -Path $policy -Force | Out-Null
+    Ensure-SetupRegistryKey -Path $policy
     New-ItemProperty -Path $policy -Name StartLayoutFile -Value $taskbar -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $policy -Name LockedStartLayout -Value 1 -PropertyType DWord -Force | Out-Null
 

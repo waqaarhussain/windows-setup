@@ -1,5 +1,67 @@
 #Requires -Version 5.1
 # Functions only. Dot-source from setup or from the non-destructive validation script.
+function Ensure-SetupRegistryKey([string]$Path) {
+    $match = [regex]::Match($Path, '^(HKCU|HKLM):\\(.+)$', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $match.Success) { throw 'Registry helpers support literal HKCU or HKLM paths only.' }
+    $hive = if ($match.Groups[1].Value -ieq 'HKCU') { [Microsoft.Win32.Registry]::CurrentUser } else { [Microsoft.Win32.Registry]::LocalMachine }
+    # CreateSubKey opens existing keys without replacing values or child keys.
+    $key = $hive.CreateSubKey($match.Groups[2].Value)
+    if (-not $key) { throw "Could not open or create registry key: $Path" }
+    $key.Dispose()
+}
+
+function Dword([string]$Path, [string]$Name, [int]$Value) {
+    Ensure-SetupRegistryKey -Path $Path
+    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+    if ((Get-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction Stop).$Name -ne $Value) {
+        throw "Registry value verification failed: $Path / $Name"
+    }
+}
+
+function Get-VpsFirewallProfileNames([object[]]$Connections) {
+    @($Connections | ForEach-Object {
+        switch ($_.NetworkCategory.ToString()) {
+            'DomainAuthenticated' { 'Domain' }
+            'Private' { 'Private' }
+            'Public' { 'Public' }
+            default { throw "Unknown active network category: $($_.NetworkCategory)" }
+        }
+    } | Select-Object -Unique)
+}
+
+function Enable-VpsNetworkSharing {
+    $connections = @(Get-NetConnectionProfile | Where-Object {
+        $_.IPv4Connectivity -ne 'Disconnected' -or $_.IPv6Connectivity -ne 'Disconnected'
+    })
+    if ($connections.Count -eq 0) { throw 'No active network profile found.' }
+    $profileNames = @(Get-VpsFirewallProfileNames -Connections $connections)
+    foreach ($name in @('fdPHost','FDResPub','SSDPSRV','upnphost','LanmanServer')) {
+        Set-Service -Name $name -StartupType Automatic
+        Start-Service -Name $name -ErrorAction Stop
+    }
+    foreach ($connection in $connections) {
+        Write-Host "Configuring discovery/sharing: $($connection.InterfaceAlias) ($($connection.NetworkCategory))"
+    }
+    foreach ($group in @('Network Discovery','File and Printer Sharing')) {
+        $rules = @(Get-NetFirewallRule -DisplayGroup $group -ErrorAction Stop)
+        if ($rules.Count -eq 0) { throw "Missing firewall rule group: $group" }
+        # Scope inbound rules before enabling them. Preserve native multicast/outbound scopes.
+        $rules | Where-Object { $_.Direction -eq 'Inbound' } | Set-NetFirewallRule -RemoteAddress LocalSubnet -ErrorAction Stop
+        $rules | Set-NetFirewallRule -Enabled True -Profile $profileNames -ErrorAction Stop
+        $effective = @(Get-NetFirewallRule -PolicyStore ActiveStore -DisplayGroup $group -ErrorAction Stop)
+        foreach ($profileName in $profileNames) {
+            foreach ($rule in $rules) {
+                $matching = @($effective | Where-Object {
+                    $_.Name -eq $rule.Name -and $_.Enabled -eq 'True' -and
+                    ($_.Profile.ToString() -match "(^|,\s*)$profileName($|,)|^Any$")
+                })
+                if ($matching.Count -eq 0) { throw "Rule $($rule.Name) is not effectively enabled for $profileName; check Group Policy." }
+            }
+        }
+    }
+    Write-Host "Discovery and sharing enabled for: $($profileNames -join ', '). Inbound rules are scoped to LocalSubnet." -ForegroundColor Green
+}
+
 function Get-VpsOptionalServiceNames {
     @('Fax','MapsBroker','RetailDemo','WMPNetworkSvc','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc')
 }
@@ -51,7 +113,7 @@ function Set-VpsChromeDefaults([string]$Root) {
         if ($existing -and $existing -ne $defaults) {
             Write-Warning 'An existing default-associations policy is configured. It was preserved; it may override Chrome at sign-in.'
         } else {
-            New-Item -Path $policy -Force | Out-Null
+            Ensure-SetupRegistryKey -Path $policy
             New-ItemProperty -Path $policy -Name DefaultAssociationsConfiguration -Value $defaults -PropertyType String -Force | Out-Null
         }
     }
@@ -116,7 +178,7 @@ function Enable-VpsStorageCleanup([string]$Root, [string]$SourceDirectory) {
             ConfigStorageSenseRecycleBinCleanupThreshold=0
             ConfigStorageSenseCloudContentDehydrationThreshold=0
         }
-        New-Item -Path $policy -Force | Out-Null
+        Ensure-SetupRegistryKey -Path $policy
         foreach ($entry in $values.GetEnumerator()) {
             New-ItemProperty -Path $policy -Name $entry.Key -Value $entry.Value -PropertyType DWord -Force | Out-Null
             if ((Get-ItemProperty -Path $policy -Name $entry.Key).($entry.Key) -ne $entry.Value) { throw 'Storage Sense policy verification failed.' }

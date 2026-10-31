@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1, 2026-10-31
+
+- Fix unsafe registry key creation: open/create existing keys non-destructively and preserve sibling values and child keys on repeated writes.
+- Enable discovery and file/printer sharing for all detected active firewall profiles, including Public, with inbound LocalSubnet scope and native outbound scopes preserved.
+- Print complete failure messages after the summary table.
+- Add Windows regression checks using an isolated test registry key and mocked Public/mixed-network firewall commands.
+
 ## 0.3.0, 2026-10-31
 
 - Create the independent `windows-setup` repository from `windows-server-setup` at commit `d9210aaa77a8e01833da448ecd8a72d93a1a109d`.

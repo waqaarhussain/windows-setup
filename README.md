@@ -28,7 +28,7 @@ Rerunning gets the latest scripts and reapplies settings, including application 
 | Start pins | Windows 11 JSON with an empty pinned list, applied once where the supported GPO capability is present |
 | Taskbar | Taskbar-only XML including Chrome; existing order and removing Edge may remain manual |
 | Tray icons | Reports the per-app Windows 11 setting under Personalisation > Taskbar > Other system tray icons |
-| Discovery/sharing | Entire firewall groups and dependency services for detected active Private/Domain profiles |
+| Discovery/sharing | Entire firewall groups and dependency services for detected active profiles, including Public |
 | Notifications | Inherited toast/app-notification preferences disabled |
 | Optional services | Fax, offline maps, retail demo, Windows Media Player library sharing and Xbox services; original startup settings saved |
 | Storage | Daily Storage Sense where available and native Windows update/temp cleanup at 03:30 local time |
@@ -77,7 +77,7 @@ Restore saved startup types, restarting services that originally ran:
 & 'C:\ProgramData\WindowsSetup\Restore-OptionalServices.ps1'
 ```
 
-Sharing configures supported profiles active during setup. Public is skipped; an all-Public configuration reports failure. There is no watcher for later profile changes. A VPS marked Private can still have a public IP. Restrict SMB/NetBIOS/discovery using the provider firewall or VPN before using sharing. Setup does not create shares or change the provider firewall.
+Sharing configures all profiles active during setup, including Public. Inbound discovery/sharing rules are scoped to LocalSubnet before enabling; native outbound/multicast scopes are preserved. Network categories and RDP rules are unchanged. There is no watcher for later profile changes. Access from other remote networks requires a separate explicit firewall-scope decision. Setup does not create shares or change the provider firewall.
 
 Storage Sense cleans unused temporary files daily, excluding Downloads, Recycle Bin and cloud-file dehydration. If unavailable, setup reports the Disk Cleanup fallback.
 
@@ -100,3 +100,5 @@ Windows CI parses scripts, checks hashes and shell assets, tests OS/capability g
 Update manifest.json when package scripts/assets change, using hashes of exact UTF-8/LF tracked bytes.
 
 References: [Start layout](https://learn.microsoft.com/en-us/windows/configuration/start/layout), [taskbar pins](https://learn.microsoft.com/en-us/windows/configuration/taskbar/pinned-apps), [Storage Sense](https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-storage), [component cleanup](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/clean-up-the-winsxs-folder).
+
+Registry writes open/create keys without replacing them, and update only the requested values. Regression tests preserve existing values and child keys across repeated writes. This prevents further resets; it cannot reconstruct unrelated settings that an earlier toolkit run may already have removed. Failed steps are also printed in full after the results table.

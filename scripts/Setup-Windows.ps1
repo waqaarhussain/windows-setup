@@ -40,10 +40,6 @@ function Step([string]$name, [scriptblock]$do) {
     }
     catch { $results.Add([pscustomobject]@{Step=$name;Result='FAILED';Notes=$_.Exception.Message}); Write-Warning "$name : $($_.Exception.Message)" }
 }
-function Dword([string]$path,[string]$name,[int]$value) {
-    New-Item -Path $path -Force | Out-Null
-    New-ItemProperty -Path $path -Name $name -Value $value -PropertyType DWord -Force | Out-Null
-}
 function DownloadSigned([string]$url,[string]$to,[string]$publisherRegex) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $url -OutFile $to -UseBasicParsing -MaximumRedirection 5
@@ -146,35 +142,7 @@ try {
         Write-Host $script:stepNotes -ForegroundColor Yellow
     }
     Step '13. Network discovery and file/printer sharing for active network profiles' {
-        $profiles = @(Get-NetConnectionProfile | Where-Object {
-            $_.IPv4Connectivity -ne 'Disconnected' -or $_.IPv6Connectivity -ne 'Disconnected'
-        })
-        if ($profiles.Count -eq 0) { throw 'No active network profile found' }
-        $applicable = @($profiles | Where-Object { $_.NetworkCategory -ne 'Public' })
-        if ($applicable.Count -eq 0) { throw 'Only Public profiles are active; refused to expose SMB' }
-        foreach ($name in @('fdPHost','FDResPub','SSDPSRV','upnphost','LanmanServer')) {
-            Set-Service -Name $name -StartupType Automatic
-            Start-Service -Name $name -ErrorAction Stop
-        }
-        $profileNames = @($applicable | ForEach-Object {
-            if ($_.NetworkCategory -eq 'DomainAuthenticated') { 'Domain' } else { 'Private' }
-        } | Select-Object -Unique)
-        foreach ($connection in $applicable) {
-            $profileName = if ($connection.NetworkCategory -eq 'DomainAuthenticated') { 'Domain' } else { 'Private' }
-            Write-Host "Configuring $($connection.InterfaceAlias) ($profileName)"
-        }
-        foreach ($group in @('Network Discovery','File and Printer Sharing')) {
-            $rules = @(Get-NetFirewallRule -DisplayGroup $group -ErrorAction Stop)
-            if ($rules.Count -eq 0) { throw "Missing firewall rule group: $group" }
-            # Enable the entire group, including outbound rules, for all detected supported profiles at once.
-            $rules | Set-NetFirewallRule -Enabled True -Profile $profileNames -ErrorAction Stop
-            $effective = @(Get-NetFirewallRule -PolicyStore ActiveStore -DisplayGroup $group -ErrorAction Stop)
-            foreach ($profileName in $profileNames) {
-                $matching = @($effective | Where-Object { $_.Enabled -eq 'True' -and ($_.Profile.ToString() -match "(^|,\s*)$profileName($|,)|^Any$") })
-                if ($matching.Count -lt $rules.Count) { throw "Not all $group rules are effectively enabled for $profileName; check Group Policy" }
-            }
-        }
-        Write-Host 'VPS WARNING: restrict SMB/NetBIOS/discovery with provider firewall or VPN.' -ForegroundColor Yellow
+        Enable-VpsNetworkSharing
     }
     Step '14. Disable app and toast notifications' {
         Dword 'HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications' 'ToastEnabled' 0
@@ -203,10 +171,15 @@ try {
     }
     Write-Host "`n=== SETUP RESULTS ===" -ForegroundColor Cyan
     $results | Format-Table -AutoSize
+    $failed = @($results | Where-Object { $_.Result -eq 'FAILED' })
+    if ($failed.Count -gt 0) {
+        Write-Host "`nFAILURE DETAILS" -ForegroundColor Red
+        $failed | Format-List -Property @('Step','Notes')
+    }
     Write-Host "Log: $logPath"
     Write-Host 'Sign out and sign in for Start policy to apply; some settings require reboot.' -ForegroundColor Yellow
     Write-Host 'The taskbar icon order / unpinning Edge remain manual.' -ForegroundColor Yellow
-    Write-Host 'Sharing is not applied to Public networks.' -ForegroundColor Yellow
+    Write-Host 'Sharing includes active Public profiles; inbound sharing/discovery rules use LocalSubnet scope.' -ForegroundColor Yellow
     if (@($results | Where-Object { $_.Step -like '15.*' -and $_.Result -eq 'Needs action' }).Count -gt 0) {
         Write-Host 'ACTION: In Settings > Apps > Default apps, select Google Chrome and choose Set default.' -ForegroundColor Yellow
     }

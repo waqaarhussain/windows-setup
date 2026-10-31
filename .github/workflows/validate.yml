@@ -42,3 +42,9 @@ jobs:
       - name: Validate Windows 11 targeting and layout capability gates
         shell: powershell
         run: .\tests\Validate-Windows11.ps1
+      - name: Preserve existing registry values and subkeys on repeated writes
+        shell: powershell
+        run: .\tests\Validate-RegistryWrites.ps1
+      - name: Enable Public and mixed-profile sharing with native outbound scopes preserved
+        shell: powershell
+        run: .\tests\Validate-Sharing.ps1
