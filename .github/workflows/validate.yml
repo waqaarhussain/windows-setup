@@ -1,0 +1,44 @@
+name: Validate PowerShell package
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse scripts and check release checksums
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($file in Get-ChildItem -Recurse -Filter *.ps1) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
+          $manifest = Get-Content manifest.json -Raw | ConvertFrom-Json
+          foreach ($property in $manifest.files.PSObject.Properties) {
+            if ((Get-FileHash -LiteralPath $property.Name -Algorithm SHA256).Hash -ne $property.Value) {
+              throw "Manifest checksum is stale: $($property.Name)"
+            }
+          }
+          [xml]$layout = Get-Content assets/TaskbarLayout.xml -Raw
+          $pins = Get-Content assets/StartPins.json -Raw | ConvertFrom-Json
+          if ($pins.pinnedList.Count -ne 0 -or -not $pins.applyOnce) { throw 'Unexpected Windows 11 Start layout.' }
+          $source = Get-Content scripts/Setup-Windows.ps1 -Raw
+          if ($source -match 'WinRARLicenseBase64|FromBase64String|RAR registration data') {
+            throw 'Embedded licence material must not be committed'
+          }
+          if (Get-ChildItem -Recurse -Filter rarreg.key) { throw 'Private WinRAR licence found' }
+      - name: Validate browser defaults and cleanup scope without changing Windows
+        shell: powershell
+        run: .\tests\Validate-Extras.ps1
+      - name: Reject invalid licence downloads without downloading a real licence
+        shell: powershell
+        run: .\tests\Validate-LicenseDownload.ps1
+      - name: Validate Windows 11 targeting and layout capability gates
+        shell: powershell
+        run: .\tests\Validate-Windows11.ps1

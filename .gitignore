@@ -1,0 +1,11 @@
+# Local licences, installer downloads and logs must never be committed.
+rarreg.key
+*.key
+*.pfx
+*.p12
+*.msi
+*.exe
+*.log
+*.csv
+*.reg
+*.zip
