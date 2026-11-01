@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2, 2026-11-01
+
+- Remove the blanket LocalSubnet override that fails on Windows logical-endpoint firewall rules.
+- Enable both sharing groups for all active profiles, including Public, while preserving existing address/port/endpoint filters.
+- Add installer `-SharingOnly` mode for repairs without reinstalling applications or downloading the licence.
+- Include the failing rule name in errors, and test logical-endpoint constraints alongside Public and mixed profiles.
+
 ## 0.3.1, 2026-10-31
 
 - Fix unsafe registry key creation: open/create existing keys non-destructively and preserve sibling values and child keys on repeated writes.

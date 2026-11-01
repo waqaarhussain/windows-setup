@@ -45,9 +45,15 @@ function Enable-VpsNetworkSharing {
     foreach ($group in @('Network Discovery','File and Printer Sharing')) {
         $rules = @(Get-NetFirewallRule -DisplayGroup $group -ErrorAction Stop)
         if ($rules.Count -eq 0) { throw "Missing firewall rule group: $group" }
-        # Scope inbound rules before enabling them. Preserve native multicast/outbound scopes.
-        $rules | Where-Object { $_.Direction -eq 'Inbound' } | Set-NetFirewallRule -RemoteAddress LocalSubnet -ErrorAction Stop
-        $rules | Set-NetFirewallRule -Enabled True -Profile $profileNames -ErrorAction Stop
+        # Logical-endpoint rules reject physical address/port filters. Change only state/profile.
+        # Preserve every existing address, port, logical endpoint and multicast filter.
+        foreach ($rule in $rules) {
+            try {
+                $rule | Set-NetFirewallRule -Enabled True -Profile $profileNames -ErrorAction Stop
+            } catch {
+                throw "Could not enable $group rule '$($rule.Name)': $($_.Exception.Message)"
+            }
+        }
         $effective = @(Get-NetFirewallRule -PolicyStore ActiveStore -DisplayGroup $group -ErrorAction Stop)
         foreach ($profileName in $profileNames) {
             foreach ($rule in $rules) {
@@ -59,7 +65,7 @@ function Enable-VpsNetworkSharing {
             }
         }
     }
-    Write-Host "Discovery and sharing enabled for: $($profileNames -join ', '). Inbound rules are scoped to LocalSubnet." -ForegroundColor Green
+    Write-Host "Discovery and sharing enabled for: $($profileNames -join ', '). Existing rule address/port/endpoint filters were preserved." -ForegroundColor Green
 }
 
 function Get-VpsOptionalServiceNames {

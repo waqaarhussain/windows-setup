@@ -7,8 +7,9 @@ $script:Connections = @([pscustomobject]@{ InterfaceAlias='Test NIC'; NetworkCat
 $script:SharingTestRules = @{}
 foreach ($group in @('Network Discovery','File and Printer Sharing')) {
     $script:SharingTestRules[$group] = @(
-        [pscustomobject]@{ Name="$group-In"; Direction='Inbound'; Enabled='False'; Profile='None'; RemoteAddress='Any' },
-        [pscustomobject]@{ Name="$group-Out"; Direction='Outbound'; Enabled='False'; Profile='None'; RemoteAddress='NativeOutboundScope' }
+        [pscustomobject]@{ Name="$group-In"; Direction='Inbound'; Enabled='False'; Profile='None'; RemoteAddress='LocalSubnet'; OriginalRemoteAddress='LocalSubnet'; LogicalEndpoint=$false },
+        [pscustomobject]@{ Name="$group-Logical-In"; Direction='Inbound'; Enabled='False'; Profile='None'; RemoteAddress='Any'; OriginalRemoteAddress='Any'; LogicalEndpoint=$true },
+        [pscustomobject]@{ Name="$group-Out"; Direction='Outbound'; Enabled='False'; Profile='None'; RemoteAddress='NativeOutboundScope'; OriginalRemoteAddress='NativeOutboundScope'; LogicalEndpoint=$false }
     )
 }
 function Get-NetConnectionProfile { $script:Connections }
@@ -20,8 +21,11 @@ function Get-NetFirewallRule {
 }
 function Set-NetFirewallRule {
     [CmdletBinding()]
-    param([Parameter(ValueFromPipeline)]$InputObject, $Enabled, [string[]]$Profile, [string]$RemoteAddress)
+    param([Parameter(ValueFromPipeline)]$InputObject, $Enabled, [string[]]$Profile, [string]$RemoteAddress, [string]$LocalPort, [string]$RemotePort)
     process {
+        if ($InputObject.LogicalEndpoint -and ($PSBoundParameters.ContainsKey('RemoteAddress') -or $PSBoundParameters.ContainsKey('LocalPort') -or $PSBoundParameters.ContainsKey('RemotePort'))) {
+            throw 'Logical endpoints (trust tuples) cannot be combined with specific addresses or ports.'
+        }
         if ($PSBoundParameters.ContainsKey('Enabled')) { $InputObject.Enabled = $Enabled.ToString() }
         if ($PSBoundParameters.ContainsKey('Profile')) { $InputObject.Profile = $Profile -join ', ' }
         if ($PSBoundParameters.ContainsKey('RemoteAddress')) { $InputObject.RemoteAddress = $RemoteAddress }
@@ -31,8 +35,7 @@ Enable-VpsNetworkSharing
 foreach ($groupRules in $script:SharingTestRules.Values) {
     foreach ($rule in $groupRules) {
         if ($rule.Enabled -ne 'True' -or $rule.Profile -ne 'Public') { throw 'Public sharing was skipped or not enabled.' }
-        if ($rule.Direction -eq 'Inbound' -and $rule.RemoteAddress -ne 'LocalSubnet') { throw 'Inbound rule scope is too broad.' }
-        if ($rule.Direction -eq 'Outbound' -and $rule.RemoteAddress -ne 'NativeOutboundScope') { throw 'Native outbound scope was changed.' }
+        if ($rule.RemoteAddress -ne $rule.OriginalRemoteAddress) { throw 'An existing rule address filter was changed.' }
     }
 }
 $script:Connections += @(
@@ -47,4 +50,4 @@ foreach ($groupRules in $script:SharingTestRules.Values) {
         }
     }
 }
-Write-Host 'PASS: Public-only and mixed profiles enable all sharing rules; inbound scope and native outbound scopes are preserved.'
+Write-Host 'PASS: Public/mixed profiles and logical-endpoint rules enable successfully with existing address filters preserved.'

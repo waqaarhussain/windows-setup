@@ -4,6 +4,7 @@ param(
     [string]$WinRARLicensePath,
     [string]$WinRARLicenseUrl = 'https://drive.google.com/uc?export=download&id=12IOtUoZZv3sCcHJuC-4Lz1lh76z_36fc',
     [switch]$SkipWinRARLicenseDownload,
+    [switch]$SharingOnly,
     [switch]$FromLocalPackage
 )
 
@@ -85,6 +86,20 @@ try {
         if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -ne $expected) {
             throw "Checksum mismatch: $relative. No setup script was run."
         }
+    }
+
+    if ($SharingOnly) {
+        . (Join-Path $stage 'scripts/Configure-Extras.ps1')
+        $repairLogs = Join-Path $env:ProgramData 'WindowsSetup\Logs'
+        New-Item -ItemType Directory -Path $repairLogs -Force | Out-Null
+        $repairLog = Join-Path $repairLogs ('Sharing-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.txt')
+        Start-Transcript -Path $repairLog | Out-Null
+        try {
+            Enable-VpsNetworkSharing
+            Write-Host "Sharing repair completed. Log: $repairLog" -ForegroundColor Green
+            Write-Host 'Close and reopen Advanced sharing settings to check both switches.' -ForegroundColor Yellow
+        } finally { Stop-Transcript | Out-Null }
+        return
     }
 
     if (-not $WinRARLicensePath -and -not $SkipWinRARLicenseDownload) {

@@ -77,7 +77,7 @@ Restore saved startup types, restarting services that originally ran:
 & 'C:\ProgramData\WindowsSetup\Restore-OptionalServices.ps1'
 ```
 
-Sharing configures all profiles active during setup, including Public. Inbound discovery/sharing rules are scoped to LocalSubnet before enabling; native outbound/multicast scopes are preserved. Network categories and RDP rules are unchanged. There is no watcher for later profile changes. Access from other remote networks requires a separate explicit firewall-scope decision. Setup does not create shares or change the provider firewall.
+Sharing configures all profiles active during setup, including Public. Existing inbound/outbound address, port, logical-endpoint and multicast filters are preserved; no uniform LocalSubnet override is applied. Network categories and RDP rules are unchanged. There is no watcher for later profile changes. Access from other remote networks requires a separate explicit firewall-scope decision. Setup does not create shares or change the provider firewall.
 
 Storage Sense cleans unused temporary files daily, excluding Downloads, Recycle Bin and cloud-file dehydration. If unavailable, setup reports the Disk Cleanup fallback.
 
@@ -102,3 +102,13 @@ Update manifest.json when package scripts/assets change, using hashes of exact U
 References: [Start layout](https://learn.microsoft.com/en-us/windows/configuration/start/layout), [taskbar pins](https://learn.microsoft.com/en-us/windows/configuration/taskbar/pinned-apps), [Storage Sense](https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-storage), [component cleanup](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/clean-up-the-winsxs-folder).
 
 Registry writes open/create keys without replacing them, and update only the requested values. Regression tests preserve existing values and child keys across repeated writes. This prevents further resets; it cannot reconstruct unrelated settings that an earlier toolkit run may already have removed. Failed steps are also printed in full after the results table.
+
+## Repair sharing only
+
+For a machine already configured by this toolkit, add `-SharingOnly` to the normal installer command. It downloads and verifies the package, then starts the discovery/sharing services and enables both firewall groups for the active profiles, including Public. It skips application installation, licence download and desktop/registry changes. Existing rule filters are preserved to support Windows logical-endpoint rules. Earlier versions may have changed some rules before failing; this mode preserves their current filters rather than resetting the entire firewall.
+
+```powershell
+$f = "$env:TEMP\windows-setup-install.ps1"; iwr 'https://raw.githubusercontent.com/waqaarhussain/windows-setup/main/install.ps1' -UseBasicParsing -OutFile $f; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $f -SharingOnly
+```
+
+Close and reopen Advanced sharing settings afterwards. A transcript is saved in the usual Logs folder. A command-level success verifies the effective firewall rules, not a direct observation of the Settings switches.

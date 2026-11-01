@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "sourceRepository": "waqaarhussain/windows-server-setup",
   "sourceCommit": "d9210aaa77a8e01833da448ecd8a72d93a1a109d",
   "files": {
     "assets/StartPins.json": "dd5c7976abf52690a89fd07e27e22d628ca262c4a33f6332562c74138dd6be2d",
     "assets/TaskbarLayout.xml": "a292eb70c577bdd3bc1f1236ae51393f8b6b9a36274a0ba3330e82588a761797",
-    "scripts/Configure-Extras.ps1": "d4aeb2a30a361290576b948b604c92814768a2c64a660929e399ee53a8151aec",
+    "scripts/Configure-Extras.ps1": "a3e4d0f411e1d55cc8c64c1a0e0865f65e341326d5c70222daa9547817201ab5",
     "scripts/Configure-Windows11.ps1": "b6d928059845772cd90ee349837ad8e6881aa495b9a68a018d50cf92c6caecda",
     "scripts/Disable-CustomLayout.ps1": "d24beba9eb9ff3b3ebce16f3c5cd5524ed2645c9a28519ec4375f1ebc49791ee",
     "scripts/Invoke-StorageCleanup.ps1": "787bd4b7260b8e6b3e491718ae5982ea0caddbc63e2c1a94f54bd51711c28c1c",
     "scripts/Restore-OptionalServices.ps1": "54280ddda2c44ac43b8623c4ef5c5fc1e58418798ab59ab734f42539abd9cf1c",
-    "scripts/Setup-Windows.ps1": "e2779d0eecaf492638d31874eb3f29409ae4b06439540972dd3b2c2a5e01f733"
+    "scripts/Setup-Windows.ps1": "69b8040c92fd5641cb96c7f312223b94def98161e14c8e6f71bfb928cb085de9"
   }
 }
